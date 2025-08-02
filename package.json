@@ -1,11 +1,19 @@
 {
+  "name": "new_feed",
+  "version": "1.0.0",
+  "main": "start.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
   "dependencies": {
     "axios": "^1.11.0",
     "basic-ftp": "^5.0.5",
-    "fs": "^0.0.1-security",
     "node-cron": "^4.2.1",
-    "playwright": "^1.54.1",
-    "playwright-cluster": "^1.0.7",
+    "playwright": "^1.54.2",
     "xml2js": "^0.6.2"
   }
 }
