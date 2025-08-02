@@ -21,12 +21,9 @@ const config = {
 };
 
 
-
 const axios = require('axios');
 const { parseString, Builder } = require('xml2js');
 const { chromium } = require('playwright');
-
-
 
 
 class Parser {
@@ -58,39 +55,33 @@ class Parser {
             ]
         });
 
-        // this.context = await this.browser.newContext({
-        //     geolocation: { 
-        //         latitude: 55.7558,
-        //         longitude: 37.6173,
-        //         accuracy: 50
-        //     },
-        //     permissions: ['geolocation'],
-        //     locale: 'ru-RU',
-        //     viewport: { width: 1920, height: 1080 }
-        // });
-
+        
         this.context = await this.browser.newContext({
-            // Принудительно устанавливаем размер окна
-            viewport: { width: 1280, height: 1024 },
-            screen: { width: 1280, height: 1024 },
+            // ### Это для геолокации (Москва)
+            // geolocation: { 
+            //     latitude: 55.7558,
+            //     longitude: 37.6173,
+            //     accuracy: 50
+            // },
+            // permissions: ['geolocation'],
+            locale: 'ru-RU',
+            viewport: { width: 1280, height: 1024 },// Принудительно устанавливаем размер окна
+            screen: { width: 1280, height: 1024 }
         });
 
-        // Дополнительные гарантии
+        // Дополнительны context
         const page = await this.context.newPage();
         await page.setViewportSize({ width: 1280, height: 1024 });
         this.page = page;
-
-        //await this.context.route('**/*.{png,jpg,jpeg,svg,gif,webp}', route => route.abort());
-        //await this.context.route('**/*.css', route => route.abort());
-
-        this.page = await this.context.newPage();
+        // await this.context.route('**/*.{png,jpg,jpeg,svg,gif,webp}', route => route.abort());
+        // await this.context.route('**/*.css', route => route.abort());
         await this.page.setExtraHTTPHeaders({
             'Accept-Language': 'ru-RU,ru;q=0.9',
-            // 'X-Forwarded-For': '95.84.0.0' // Москва
+            // 'X-Forwarded-For': '95.84.0.0' // Москва геолокация
         });
     }
 
-    async parseOzon(articleOzon, num) {
+    async parseOzon(articleOzon) {
         if (!articleOzon || articleOzon.trim() === '') {
             return this.getEmptyPricesOzon();
         }
@@ -123,7 +114,7 @@ class Parser {
         }
     }
 
-    async parseWB(articleWB, num) {
+    async parseWB(articleWB) {
         
         if (!articleWB || articleWB.trim() === '') {
             return this.getEmptyPricesWB();
@@ -197,14 +188,14 @@ function calculatePrices (type, price_zakup, price_mrc, prices) {
 
     switch (type) {
         
-        case "ozon":
+        case "ozon": // Расчеты для Озон
             
-            if (Object.values(prices).every(price => price === "Not found")) { 
+            if (Object.values(prices).every(price => price === "Not found")) { // если все цены "Not found"
                 prices.price_ozon_1 = prices.price_ozon_2 = prices.price_ozon_3 = price_mrc * 1.4;
             }
             break;
         
-        case "wb":
+        case "wb": // Расчеты для WB
             break;
     } 
 
@@ -212,10 +203,10 @@ function calculatePrices (type, price_zakup, price_mrc, prices) {
 }
 
 
-
 async function processFeed() {
   
     try {
+
         // Загрузка XML
         console.log('Загрузка XML-фида...');
         const response = await axios.get(config.xmlUrl);
@@ -223,33 +214,18 @@ async function processFeed() {
 
         // Парсинг XML
         const parsedData = await new Promise((resolve, reject) => {
-        parseString(xmlData, (err, result) => {
-            if (err) reject(err);
-            else resolve(result);
-        });
+            parseString(xmlData, (err, result) => {
+                if (err) reject(err);
+                else resolve(result);
+            });
         });
 
         // Обработка каждого offer
         const offers = parsedData.yml_catalog.shop[0].offers[0].offer;
         console.log(`Найдено ${offers.length} товаров`);
 
-
-        offers.forEach(offer => {
-        const mrc = parseFloat(offer.price_mrc[0]);
-        const wb = parseFloat(offer.price_wb[0]);
-        const ozon = parseFloat(offer.price_ozon[0]);
-
-        // Расчет новых цен
-        const newPrices = calculatePrices(mrc, wb, ozon);
-
-        // Добавление новых тегов
-        offer.price_wb_1 = [newPrices.wb_1.toString()];
-        offer.price_wb_2 = [newPrices.wb_2.toString()];
-        offer.price_wb_3 = [newPrices.wb_3.toString()];
-        
-        offer.price_ozon_1 = [newPrices.ozon_1.toString()];
-        offer.price_ozon_2 = [newPrices.ozon_2.toString()];
-        offer.price_ozon_3 = [newPrices.ozon_3.toString()];
+        offers.forEach(offer => {            // Добавление новых тегов
+            // ToDo: здесь расчет function calculatePrices
         });
 
         // Сборка обратно в XML
@@ -266,17 +242,14 @@ async function processFeed() {
         for (const offer of offers) {
             if (offer.article_ozon && offer.article_ozon[0]) {
                 process.stdout.write(`[${i}] Артикул OZON: ${offer.article_ozon[0]}...`);
-                const ozonPrices = await parser.parseOzon(offer.article_ozon[0], i);
-                
-                Object.assign(offer, calculatePrices("ozon", offer.price_zakup, offer.price_mrc, ozonPrices));
+                const ozonPrices = await parser.parseOzon(offer.article_ozon[0]);
+                // Object.assign(offer, calculatePrices("ozon", offer.price_zakup, offer.price_mrc, ozonPrices));
                 console.log(ozonPrices);
-
             }
             if (offer.article_wb && offer.article_wb[0]) {
                 process.stdout.write(`[${i}]   Артикул WB: ${offer.article_wb[0]}...`);
-                const wbPrices = await parser.parseWB(offer.article_wb[0], i);
-    //            Object.assign(offer, wbPrices);
-                console.log(calculatePrices("wb", wbPrices));
+                const wbPrices = await parser.parseWB(offer.article_wb[0]);
+                console.log(wbPrices);
             }
             if (i++ == 20) break;
         }
@@ -299,19 +272,3 @@ processFeed()
     })
     .catch(() => process.exit(1));
 
-
-  /*
-  делал много коррекций, для ускорения процесса. В итоге сейчас за 20 минут справляется, но:
-- перестало работать правило, при котором ищет слово в названии и пересчитывает цены.(тот допил, где если "есть "РИФ", то кэф 1.2".
-- дублируются правила ценообразования, не знаю где правильно убрать. Основные, которые должны присутствовать в скрипте: 
- 1) если есть хоть одна цена на витрине, то репрайсы считаются по формуле.
- 2) если нет не одной цены, то репрайсы =прайс_мрц*1.4
- 3) проверка на минимальную цену для репрайс_вб - цена не может быть меньше, чем прайс_закуп*1.75
- 4) проверка на минимальную цену для рерпайс_озон - цена не может быть ниже, чем прайс_закуп*1.8
-- обработка и логирование ошибок:
-  1) обрыв XML (редкий сценарий, но бывает, что xml обрывается посреди офера) 
-  2) иногда, почему-то, не запускается по крону
-  3) иногда прерывает работу из-за ошибки открытия страницы.
-
-Если не ошибаюсь это все 🤔
-*/
